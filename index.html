@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Deteksi Orang - ESP32 CAM</title>
+  <style>
+    body { font-family: Arial; text-align: center; padding: 20px; }
+    .alert { background: #ffdddd; padding: 15px; border-left: 5px solid red; margin: 20px; }
+    img { max-width: 90%; margin-top: 10px; border: 2px solid #ccc; }
+  </style>
+</head>
+<body>
+  <h1>Sistem Deteksi Orang</h1>
+  <div class="alert">🚨 Orang Terdeteksi!</div>
+  <img id="latestImage" src="" alt="Memuat gambar...">
+
+  <script>
+    const scriptURL = "https://script.google.com/macros/s/AKfycbz9P5BeUGyL-h2rj15IB4a1Npzn8NhPFzcAHDmHzHv_Esy7SFHuZJKVqlPqfrrwvJPSPw/exec";
+
+    async function fetchLatestImage() {
+      try {
+        const response = await fetch(scriptURL);
+        const imageUrl = await response.text();
+        const img = document.getElementById("latestImage");
+
+        // Tambahkan timestamp untuk bypass cache
+        img.src = imageUrl + "&t=" + new Date().getTime();
+      } catch (e) {
+        console.error("Gagal memuat gambar:", e);
+      }
+    }
+
+    // Ambil gambar terbaru setiap 10 detik
+    setInterval(fetchLatestImage, 10000);
+    fetchLatestImage(); // pertama kali
+  </script>
+</body>
+</html>

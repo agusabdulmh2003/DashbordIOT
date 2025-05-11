@@ -1,0 +1,275 @@
+                <!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Monitoring</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container text-center">
+        <h1 class="text-info mb-4">Monitoring Ruangan</h1>
+        <div class="row justify-content-center" id="dashboard"></div>
+    </div>
+
+    <!-- Modal Detail -->
+    <div class="modal fade" id="detailModal" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content bg-dark text-white border-0">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title" id="modalLabel">Detail Ruangan</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Tutup"></button>
+                </div>
+                <div class="modal-body text-start" id="modalBody"></div>
+                <canvas id="chartCanvas" class="w-100" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Login -->
+    <div class="modal fade" id="loginModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static"
+        data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content bg-dark text-white">
+                <div class="modal-header">
+                    <h5 class="modal-title">Masukkan Kode Akses</h5>
+                </div>
+                <div class="modal-body">
+                    <input type="password" id="kodeInput" class="form-control" placeholder="Masukkan kode akses">
+                    <div id="errorMsg" class="text-danger mt-2 d-none">Kode salah. Coba lagi.</div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" onclick="cekKodeFirebase()">Masuk</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-database-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyCk06v8QxT12eBR2Wkucyc0lC0uO-IOIpQ",
+            databaseURL: "https://iotmonitoring-a99ff-default-rtdb.asia-southeast1.firebasedatabase.app"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        const ambangCahaya = 2000;
+        const ambangSuhu = 30.0;
+        const rooms = ['Ruangan1', 'Ruangan2'];
+        const historyData = {};
+
+        // Membuat kartu ruangan
+        function buatKartuRuangan(roomId) {
+            return `
+                <div class="col-sm-12 col-md-6 col-lg-4 mb-4">
+                  <div class="card text-white bg-secondary" id="${roomId}-card" onclick="tampilkanDetail('${roomId}')">
+                    <div class="card-body">
+                      <h5 class="card-title">${roomId.replace('Ruangan', 'Ruangan ')}</h5>
+                      <p class="card-text" id="${roomId}-suhu">Suhu: Memuat...</p>
+                      <p class="card-text" id="${roomId}-gerakan">Aktivitas: Memuat...</p>
+                      <p class="card-text" id="${roomId}-cahaya">Cahaya: Memuat...</p>
+                      <p class="card-text" id="${roomId}-status">Status: Memeriksa...</p>
+                    </div>
+                  </div>
+                </div>`;
+        }
+
+        // Menampilkan detail ruangan
+        function tampilkanDetail(roomId) {
+            const suhu = document.getElementById(`${roomId}-suhu`).innerText;
+            const gerakan = document.getElementById(`${roomId}-gerakan`).innerText;
+            const cahaya = document.getElementById(`${roomId}-cahaya`).innerText;
+            const status = document.getElementById(`${roomId}-status`).innerText;
+
+            const modalBody = `
+                <p><strong>Nama:</strong> ${roomId.replace('Ruangan', 'Ruangan ')}</p>
+                <p><strong>${suhu}</strong></p>
+                <p><strong>${gerakan}</strong></p>
+                <p><strong>${cahaya}</strong></p>
+                <p><strong>${status}</strong></p>`;
+
+            document.getElementById('modalBody').innerHTML = modalBody;
+
+            const ctx = document.getElementById('chartCanvas').getContext('2d');
+            const data = historyData[roomId] || { labels: [], suhu: [], cahaya: [] };
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.labels,
+                    datasets: [
+                        {
+                            label: 'Suhu (°C)',
+                            data: data.suhu,
+                            borderColor: 'red',
+                            fill: false
+                        },
+                        {
+                            label: 'Cahaya',
+                            data: data.cahaya,
+                            borderColor: 'yellow',
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { labels: { color: 'white' } } },
+                    scales: {
+                        x: { ticks: { color: 'white' } },
+                        y: { ticks: { color: 'white' } }
+                    }
+                }
+            });
+
+            const modal = new bootstrap.Modal(document.getElementById('detailModal'));
+            // modal.show();
+            modal.toggle();
+        }
+
+        // Mengambil data ruangan dari Firebase
+        function cekRuangan(roomId) {
+    const roomRef = database.ref(roomId);
+    roomRef.once('value')
+        .then((snapshot) => {
+            const data = snapshot.val();
+            if (!data) return;
+
+            const suhu = data.suhu || 0;
+            const gerakan = data.gerakan || 0;
+            const cahaya = data.cahaya || 0;
+
+            const aktivitas = gerakan === 1 ? "Ada aktivitas" : "Tidak ada aktivitas";
+
+            document.getElementById(`${roomId}-suhu`).innerText = `Suhu: ${suhu}°C`;
+            document.getElementById(`${roomId}-gerakan`).innerText = `Aktivitas: ${aktivitas}`;
+            document.getElementById(`${roomId}-cahaya`).innerText = `Cahaya: ${cahaya}`;
+
+            const statusEl = document.getElementById(`${roomId}-status`);
+            const card = document.getElementById(`${roomId}-card`);
+            const isBahaya = (gerakan === 0) &&
+                ((suhu < ambangSuhu && cahaya < ambangCahaya) ||
+                    (suhu < ambangSuhu && cahaya > ambangCahaya) ||
+                    (suhu > ambangSuhu && cahaya < ambangCahaya));
+
+            if (isBahaya) {
+                statusEl.innerText = '⚠️ Mencurigakan';
+                card.classList.replace('bg-secondary', 'bg-danger');
+            } else {
+                statusEl.innerText = '✅ Aman';
+                card.classList.replace('bg-secondary', 'bg-success');
+            }
+
+            // Update history data for the chart
+            const now = new Date();
+            const time = now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0');
+            if (!historyData[roomId]) {
+                historyData[roomId] = { labels: [], suhu: [], cahaya: [] };
+            }
+
+            historyData[roomId].labels.push(time);
+            historyData[roomId].suhu.push(suhu);
+            historyData[roomId].cahaya.push(cahaya);
+
+            if (historyData[roomId].labels.length > 10) {
+                historyData[roomId].labels.shift();
+                historyData[roomId].suhu.shift();
+                historyData[roomId].cahaya.shift();
+            }
+
+            // Update the chart
+            updateChart(roomId);
+        })
+        .catch((error) => {
+            console.error(`❌ Gagal membaca ${roomId}:`, error);
+        });
+}
+
+// Function to update the chart
+function updateChart(roomId) {
+    const ctx = document.getElementById('chartCanvas').getContext('2d');
+    const data = historyData[roomId] || { labels: [], suhu: [], cahaya: [] };
+
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.labels,
+            datasets: [
+                {
+                    label: 'Suhu (°C)',
+                    data: data.suhu,
+                    borderColor: 'red',
+                    fill: false
+                },
+                {
+                    label: 'Cahaya',
+                    data: data.cahaya,
+                    borderColor: 'yellow',
+                    fill: false
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: 'white' } } },
+            scales: {
+                x: { ticks: { color: 'white' } },
+                y: { ticks: { color: 'white' } }
+            }
+        }
+    });
+}
+
+    // Mulai monitoring setelah login
+    function mulaiMonitoring() {
+        const dashboard = document.getElementById('dashboard');
+        rooms.forEach(room => {
+            dashboard.innerHTML += buatKartuRuangan(room);
+            cekRuangan(room);
+            setInterval(() => cekRuangan(room), 1000);
+        });
+    }
+
+    // Cek kode akses dan login
+    function cekKodeFirebase() {
+        const input = document.getElementById("kodeInput").value;
+        const error = document.getElementById("errorMsg");
+
+        firebase.database().ref("akses/kode").once("value").then(snapshot => {
+            const kodeBenar = snapshot.val();
+            if (input === kodeBenar) {
+                error.classList.add("d-none");
+                bootstrap.Modal.getInstance(document.getElementById('loginModal')).hide();
+                localStorage.setItem('lastLogin', Date.now()); // Simpan waktu login saat berhasil
+                mulaiMonitoring();
+            } else {
+                error.classList.remove("d-none");
+            }
+        });
+    }
+
+    // Cek status login saat halaman dimuat
+    function cekLoginStatus() {
+        const lastLogin = localStorage.getItem('lastLogin');
+        const currentTime = Date.now();
+
+        // Jika tidak ada waktu login sebelumnya atau sudah lebih dari 30 menit (1800000 ms), tampilkan modal login
+        if (!lastLogin || (currentTime - lastLogin > 1800000)) { // 1800000 ms = 30 menit
+            const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+            loginModal.show();
+        } else {
+            mulaiMonitoring(); // Jika login masih valid, lanjutkan ke monitoring
+        }
+    }
+
+    window.onload = () => {
+        cekLoginStatus(); // Cek status login saat halaman dimuat
+    };
+</script>
