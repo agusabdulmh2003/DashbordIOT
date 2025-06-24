@@ -41,7 +41,7 @@ Sistem ini adalah proyek Internet of Things (IoT) yang bertujuan untuk memantau 
                                            │
                                   [LED]  [Buzzer]
 
-                          +──── Web Dashboard (Next.js) ────+
+                          +────      Web Dashboard      ────+
                           |     Tampilkan data sensor        |
                           +─────────────────────────────────+
 ```
